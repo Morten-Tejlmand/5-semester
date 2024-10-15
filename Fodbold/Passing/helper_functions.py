@@ -93,8 +93,16 @@ def create_graphs(df, xG: float = 0.05, min_passes: int = 5):
     #combine the x and y coordinates
     sequences_filtered["start_node"] = sequences_filtered["start_node_x"] + sequences_filtered["start_node_y"] / 10
     sequences_filtered["end_node"] = sequences_filtered["end_node_x"] + sequences_filtered["end_node_y"] / 10
+    
+    
+    
+    # Add a sequence column by grouping for possession_id
+    sequences_filtered = sequences_filtered.sort_values(['possession_id', 'timestamp'], ascending=[True, True])
+    sequences_filtered = sequences_filtered[sequences_filtered['start_node'] != sequences_filtered['end_node']]
+    sequences_filtered['sequence'] = sequences_filtered.groupby('possession_id').cumcount(ascending=False) + 1
 
-    sequences_filtered = sequences_filtered[["start_node","end_node","xg","possession_id"]]
+    # Filter out rows where start_node and end_node are the same
+    sequences_filtered = sequences_filtered[["start_node","end_node","xg","possession_id", "sequence"]]
 
     #remove edges between the same node if wanted
     final_sequences = sequences_filtered[sequences_filtered['start_node'] != sequences_filtered['end_node']]
@@ -124,35 +132,42 @@ def create_graphs_dict(possession_index, final_sequences):
         graphs_dict a dict with possesion id and the corresponding graph and min xg
     """
     #iterate over possession ids and each row and append edges to a list for each graph and append that graph to a graphs dictionary (directed graph created with "nx.DiGraph(edges)")
-    #xg added as an attribute for each graph
+    # xg added as an attribute for each graph
     graphs_dict = {}
     for j in possession_index:
         edges = []
         for i in final_sequences.index:
             if j == final_sequences["possession_id"][i]:
-                edges.append((final_sequences["start_node"][i], final_sequences["end_node"][i]))
+                edge = (final_sequences["start_node"][i], final_sequences["end_node"][i])
+                edges.append(edge)
                 if j not in graphs_dict:
                     graphs_dict[j] = {"xg": final_sequences["xg"][i], "graph": None}
                 else:
                     graphs_dict[j]["xg"] = final_sequences["xg"][i]
 
-        graph = nx.DiGraph(edges)
+        graph = nx.DiGraph()
+        graph.add_edges_from(edges)
+
+        # Add sequence as an edge attribute
+        for i in final_sequences.index:
+            if j == final_sequences["possession_id"][i]:
+                graph[final_sequences["start_node"][i]][final_sequences["end_node"][i]]['sequence'] = final_sequences["sequence"][i]
+
         graphs_dict[j]["graph"] = graph
 
     graph_list = [value["graph"] for value in graphs_dict.values()]
     return graph_list, graphs_dict
 
-
 def plot_graphs(graphs_dict,possession_index):
-    """plot a graph
+    """plot a graph with edge attributes
 
-    Args:
-        graphs_dict:
-        possession_index: a specific posseion index
+        Args:
+            graphs_dict:
+            possession_index: a specific possession index
 
-    Returns:
-        a graph
-    """
+        Returns:
+            a graph
+        """
     positions = {}
     for node in graphs_dict[possession_index]["graph"].nodes():
         x = int(node)  # Integer part represents the x position
@@ -160,6 +175,10 @@ def plot_graphs(graphs_dict,possession_index):
         positions[node] = (x, y)
 
     nx.draw_networkx(graphs_dict[possession_index]["graph"], pos=positions)
+
+    # Draw edge labels
+    edge_labels = nx.get_edge_attributes(graphs_dict[possession_index]["graph"], 'sequence')
+    nx.draw_networkx_edge_labels(graphs_dict[possession_index]["graph"], pos=positions, edge_labels=edge_labels)
 
     plt.show()
     return positions
