@@ -83,12 +83,9 @@ def create_graphs(df, xG: float = 0.05, min_passes: int = 5):
     sequences_filtered['end_node_x'] = round(sequences_filtered['end_x'] / 20)
     sequences_filtered['end_node_y'] = round(sequences_filtered['end_y'] / 20)
 
-    #invert y values in second period
-    sequences_filtered_p1 = sequences_filtered[sequences_filtered["period"]==1]
-    sequences_filtered_p2 = sequences_filtered[sequences_filtered["period"]==2]
-    sequences_filtered_p2["start_node_y"] = 4 - sequences_filtered_p2["start_node_y"] 
-    sequences_filtered_p2["end_node_y"] = 4 - sequences_filtered_p2["end_node_y"] 
-    sequences_filtered = pd.concat([sequences_filtered_p1,sequences_filtered_p2], axis=0, ignore_index=True)
+    #invert y values
+    sequences_filtered["start_node_y"] = 4 - sequences_filtered["start_node_y"] 
+    sequences_filtered["end_node_y"] = 4 - sequences_filtered["end_node_y"] 
 
     #combine the x and y coordinates
     sequences_filtered["start_node"] = sequences_filtered["start_node_x"] + sequences_filtered["start_node_y"] / 10
