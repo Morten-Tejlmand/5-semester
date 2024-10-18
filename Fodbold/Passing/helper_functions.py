@@ -9,7 +9,6 @@ HOME_TEAM = 'Barcelona'
 COMPETITION_ID = 11
 SEASON_ID = 90
 
-
 def match_ids(events, home_team:str = HOME_TEAM,
               competition_id:int = COMPETITION_ID, season_id:int = SEASON_ID):
     """get all match ids for a specific team
@@ -29,8 +28,7 @@ def match_ids(events, home_team:str = HOME_TEAM,
     df = df[df["possession_team"]==home_team]
     return df
 
-
-def create_graphs(df, xG: float = 0.05, min_passes: int = 5):
+def create_graphs(df, xG: float = 0.05, min_passes: int = 5, x_cordinate: int = 20, y_cordinate: int = 20):
     """
     creates a df ready to make each sequence into a graph
 
@@ -78,10 +76,10 @@ def create_graphs(df, xG: float = 0.05, min_passes: int = 5):
     sequences_filtered["end_y"] = sequences_filtered["end_location"].str[1]
 
     #reduce the number of possible x and y coordinates, essentially making the fields/nodes of the pitch larger
-    sequences_filtered['start_node_x'] = round(sequences_filtered['start_x'] / 20)
-    sequences_filtered['start_node_y'] = round(sequences_filtered['start_y'] / 20)
-    sequences_filtered['end_node_x'] = round(sequences_filtered['end_x'] / 20)
-    sequences_filtered['end_node_y'] = round(sequences_filtered['end_y'] / 20)
+    sequences_filtered['start_node_x'] = round(sequences_filtered['start_x'] / x_cordinate)
+    sequences_filtered['start_node_y'] = round(sequences_filtered['start_y'] / y_cordinate)
+    sequences_filtered['end_node_x'] = round(sequences_filtered['end_x'] / x_cordinate)
+    sequences_filtered['end_node_y'] = round(sequences_filtered['end_y'] / y_cordinate)
 
     #invert y values
     sequences_filtered["start_node_y"] = 4 - sequences_filtered["start_node_y"] 

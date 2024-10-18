@@ -1,9 +1,13 @@
+
 import networkx as nx
 from itertools import combinations
 from networkx.algorithms.isomorphism import DiGraphMatcher
 import numpy as np
 import matplotlib.pyplot as plt
 from mlxtend.frequent_patterns import apriori, association_rules
+import multiprocessing
+
+multiprocessing.set_start_method('fork', force=True)
 
 from statsbombpy import sb
 import pandas as pd
@@ -19,22 +23,25 @@ def frequent_singletons(min_sup, edge_matrix):
 
     for edge_list in edge_matrix:
         for edge in edge_list:
-            # Use only source and target nodes for counting
-            edge_key = (edge[0], edge[1])
+            # Include edge attributes in the key to differentiate edges with different attributes
+            edge_key = (edge[0], edge[1], tuple(sorted(edge[2].items())))
             items_counted[edge_key] = items_counted.get(edge_key, 0) + 1
-            
+
             # Store the edge attributes
-            if edge_key not in edge_attributes:
-                edge_attributes[edge_key] = edge[2]
+            edge_attributes[edge_key] = edge[2]
 
     # Filter edges that meet the min_sup
     F = [key for key, value in items_counted.items() if value >= min_sup]
 
     F_graphs = []
-    for edge in F:
+    for edge_key in F:
         g = nx.DiGraph()
-        g.add_edge(edge[0], edge[1], **edge_attributes[edge])  # Add edge with original attributes
+        source = edge_key[0]
+        target = edge_key[1]
+        attributes = edge_attributes[edge_key]
+        g.add_edge(source, target, **attributes)  # Add edge with its attributes
         F_graphs.append(g)
+
     return F_graphs
 
 # Generate candidates of size k subgraphs from frequent subgraphs
@@ -43,18 +50,22 @@ def generate_candidates(F, k):
     
     # Iterate over all pairs of frequent subgraphs (F)
     for g1, g2 in combinations(F, 2):
+        # Extract edges and sort them by their sequence number
+        edges_g1 = sorted(g1.edges(data=True), key=lambda e: e[2].get('sequence'))
+        edges_g2 = sorted(g2.edges(data=True), key=lambda e: e[2].get('sequence'))
 
-        edges_g1 = sorted(g1.edges(data=True), key=lambda e: e[2].get('sequence', 0))
-        edges_g2 = sorted(g2.edges(data=True), key=lambda e: e[2].get('sequence', 0))
-        edges_g1 = edges_g1[0]
-        edges_g2 = edges_g2[0]
+        # Ensure that edges are correctly ordered by sequence, without jumps or overlaps
+        last_sequence_g1 = edges_g1[-1][2]['sequence']  # Last event's sequence in g1
+        first_sequence_g2 = edges_g2[0][2]['sequence']  # First event's sequence in g2
         
-        if edges_g1[2].get('sequence') > edges_g2[2].get('sequence') or edges_g1[2].get('sequence') < edges_g2[2].get('sequence'):
+        # Combine graphs only if sequences are continuous
+        if last_sequence_g1 + 1 == first_sequence_g2:
             union_graph = nx.compose(g1, g2)
             
-            # Ensure that the union has the correct number of edges
-            if union_graph.number_of_edges() == k:  # Check edge size instead of node size
+            # Ensure that the union has the correct number of edges (k)
+            if union_graph.number_of_edges() == k:
                 candidates.add(union_graph)
+    
     return candidates
 
 # Count the support for each candidate in the graph database
@@ -64,13 +75,15 @@ def count_support(C, graph_db):
 
     for graph in graph_db:
         for candidate in C:
-            GM = DiGraphMatcher(graph, candidate)
-            if GM.subgraph_is_isomorphic():  # Check for subgraph isomorphism
+            # Use edge_match to compare both the structure and the sequence attribute
+            GM = DiGraphMatcher(graph, candidate, edge_match=lambda x, y: x['sequence'] == y['sequence'])
+            
+            if GM.subgraph_is_isomorphic():  # Check for subgraph isomorphism with matching sequence
                 F_count[candidate] = F_count.get(candidate, 0) + 1
                 
                 # Store support for individual nodes as well
                 for subgraph in C:
-                    GM_sub = DiGraphMatcher(graph, subgraph)
+                    GM_sub = DiGraphMatcher(graph, subgraph, edge_match=lambda x, y: x['sequence'] == y['sequence'])
                     if GM_sub.subgraph_is_isomorphic():
                         subgraph_support[subgraph] = subgraph_support.get(subgraph, 0) + 1
     
@@ -112,6 +125,8 @@ def filter_frequent(F_count, subgraph_support, min_sup, graph_db_size):
             frequent_graphs.append(candidate)
     
     return frequent_graphs, stats
+
+
 def edge_attr_match(attr1, attr2):
     return attr1 == attr2  # Check if both edge attribute dictionaries are identical
 
@@ -188,8 +203,11 @@ events = sb.competition_events(
     gender="male"
 )
 
+
+
 df = match_ids(events, "Bayer Leverkusen", season_id=281, competition_id=9)
-possesion, final_sequence = create_graphs(df)
+possesion, final_sequence = create_graphs(df, xG=0.01, min_passes=3, 
+                                          x_cordinate=20, y_cordinate=30)
 graph_list, graph_dict = create_graphs_dict(possesion, final_sequence)
 
 
@@ -198,62 +216,6 @@ graph_list_sample = graph_list
 # Create a list of edges from the sampled graph_list
 edge_matrix = [list(graph.edges(data=True)) for graph in graph_list]
 GRAPH_DB = graph_list_sample  # List of graphs in the database
-min_sup = 0
+min_sup = 2
 xG = 0.5
 min_passes = 5
-
-frequent_subgraphs, stats_total = apriori_graph_mining(35, edge_matrix, GRAPH_DB, 40)
-
-# Iterate over the frequent subgraphs
-for subgraph in frequent_subgraphs:
-    # Get the edges of the subgraph
-    edges = list(subgraph.edges(data=True))
-    
-    # Get the corresponding statistics for this subgraph
-    stats = stats_total.get(subgraph, {})
-    
-    # Print the edges of the subgraph
-    print("Subgraph Edges:")
-    for u, v, attr in edges:
-        print(f"Edge {u} -> {v}, Attributes: {attr}")
-    
-    # Print the associated statistics
-    print("Statistics:")
-    print(f"Support: {stats.get('support', 'N/A')}")
-    print(f"Confidence: {stats.get('confidence', 'N/A')}")
-    print(f"Lift: {stats.get('lift', 'N/A')}")
-    print(f"Leverage: {stats.get('leverage', 'N/A')}")
-    print(f"Conviction: {stats.get('conviction', 'N/A')}")
-    print("\n" + "-"*40 + "\n")  # Separator between subgraphs
-
-subgraph_data = []
-
-# Iterate over the frequent subgraphs
-for subgraph in frequent_subgraphs:
-    # Get the edges of the subgraph
-    edges = list(subgraph.edges(data=True))
-    
-    # Get the corresponding statistics for this subgraph
-    stats = stats_total.get(subgraph, {})
-    
-    # Convert the edges and stats into a dictionary
-    subgraph_info = {
-        'edges': [(u, v, attr) for u, v, attr in edges],
-        'support': stats.get('support', 'N/A'),
-        'confidence': stats.get('confidence', 'N/A'),
-        'lift': stats.get('lift', 'N/A'),
-        'leverage': stats.get('leverage', 'N/A'),
-        'conviction': stats.get('conviction', 'N/A')
-    }
-    
-    # Append the subgraph data to the list
-    subgraph_data.append(subgraph_info)
-
-# Create a DataFrame from the collected data
-df_subgraphs = pd.DataFrame(subgraph_data)
-
-# Display the DataFrame
-print(df_subgraphs)
-
-# Optionally, save to a CSV file
-df_subgraphs.to_csv('frequent_subgraphs.csv', index=False)
