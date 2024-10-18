@@ -173,11 +173,13 @@ def apriori_graph_mining(min_sup, edge_matrix, graph_db, max_k):
         print(f"Frequent subgraphs of size {k}:")
         for subgraph in F:
             for u, v, attr in subgraph.edges(data=True):
+                # Output the edge along with its sequence attribute
                 print(f"Edge {u} -> {v}, Attributes: {attr}")
         
         k += 1  # Move to the next size of subgraphs
 
     return frequent_total
+
 
 
 graph_list = [value["graph"] for value in graphs_dict.values()]
@@ -187,6 +189,7 @@ GRAPH_DB = graph_list  # List of graphs in the database
 min_sup = 0
 
 
-frequents = apriori_graph_mining(20, edge_matrix, GRAPH_DB, 5)
-for pattern in frequents:
-    print(pattern.edges())
+frequents = apriori_graph_mining(20, edge_matrix, GRAPH_DB, )
+for subgraph in frequents:
+    edges_with_sequences = [(u, v, attr['sequence']) for u, v, attr in subgraph.edges(data=True)]
+    print(edges_with_sequences)
