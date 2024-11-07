@@ -56,6 +56,7 @@ for match_id in events['match_id'].unique():
     match_subset.dropna(subset=['pass_recipient_position'], inplace=True)
     match_subset['match_sequence'] = match_counter  
     # Process each half separately
+    half_sequence = 0  # Initialize sequence counter for halves
     for period in [1, 2]:  # Assuming '1' is the first half and '2' is the second half
         half_data = match_subset[match_subset['period'] == period].copy()
         if half_data.empty:
