@@ -21,41 +21,63 @@ events = sb.competition_events(
 df_lst = []
 half_sequence = 0  # Initialize sequence counter for halves
 match_counter = 0  # Initialize counter for matches
+#make a list to hold a df of the events of a match
+df_dict = {}
 
-# Process each unique match
-for match_id in events['match_id'].unique():
-    match_counter += 1  
-    match_subset = events[(events['match_id'] == match_id) & (events['team'] == 'Bayer Leverkusen')]
+for id in events.match_id.unique():
+    match_counter += 1
+    #find one match for one team
+    match_subset = events.loc[events['match_id'] == id]
 
-    # Get starting lineup and create a position dictionary
-    starting_11_data = match_subset.loc[match_subset['type'] == 'Starting XI', 'tactics']
-    if starting_11_data.empty:
-        continue
+    #we identify the starting 11
+    starting_11 = match_subset.loc[match_subset['type'] == 'Starting XI'].loc[match_subset['team'] == 'Bayer Leverkusen', 'tactics'].to_list()[0]
+    position_dict = {}
+    
+    #we make a dictionary for positions of players
+    for member in starting_11['lineup']:
+        player_id = int(member['player']['id'])
+        position_name = member['position']['name']
+        position_dict[player_id] = position_name
 
-    starting_11 = starting_11_data.iloc[0]
-    position_dict = {int(player['player']['id']): player['position']['name'] for player in starting_11['lineup']}
 
-    # Filter only relevant events and sort
-    match_subset = match_subset[(match_subset['possession_team'] == 'Bayer Leverkusen') &
-                                (match_subset['type'].isin(['Pass', 'Shot', 'Substitution']))].sort_values(['period', 'timestamp'])
+    #include only passes, shots, substitution or tactical shifts
+    match_subset = match_subset.loc[(match_subset['type'].isin(['Shot','Pass','Substitution', 'Tactical Shift']))]
 
-    # Update position dictionary for substitutions
-    substitutions = match_subset[match_subset['type'] == 'Substitution']
-    for _, sub in substitutions.iterrows():
-        position_dict[sub['substitution_replacement_id']] = sub['position']
+    #We include rows with Leverkusen as possession team or with type substitution or tactical shift
+    match_subset = match_subset.loc[(match_subset['possession_team'] == 'Bayer Leverkusen') | (match_subset['type'].isin(['Substitution', 'Tactical Shift']))]
 
-    # Assign pass recipient positions from position_dict
-    match_subset['pass_recipient_position'] = match_subset['pass_recipient_id'].map(position_dict)
+    #sort the values like when we did the passing sequences
+    match_subset = match_subset.sort_values(['period','timestamp'], ascending=[True, True])
 
-    # Assign shot outcome as recipient position where applicable
-    match_subset.loc[match_subset['type'] == 'Shot', 'pass_recipient_position'] = (
-        match_subset['pass_recipient_position'].fillna(match_subset['shot_outcome'])
-    )
+    match_subset['pass_recipient_position'] = np.nan
 
-    # Drop rows with missing recipient positions
+    for index, row in match_subset.iterrows():
+        #If substitution, we update the dictionary to include player
+        if row['type'] == 'Substitution' and row['team'] == 'Bayer Leverkusen':
+            position_dict[row['substitution_replacement_id']] = row['position']
+
+        #In case of a tactical shift, create a new position_dict
+        if row['type'] == 'Tactical Shift' and row['team'] == 'Bayer Leverkusen':
+            lineup = row['tactics']
+            position_dict = {}
+            for member in lineup['lineup']:
+                player_id = int(member['player']['id'])
+                position_name = member['position']['name']
+                position_dict[player_id] = position_name
+
+        elif row['pass_recipient_id'] in list(position_dict.keys()):
+            #if the player is in our dictionary, we assign his position - else he may be a player of the opponent, and we ignore him
+            match_subset.at[index, 'pass_recipient_position'] = position_dict[int(row['pass_recipient_id'])]
+            
+    #den næste linje kan eventuelt kommenteres ud, og så kan vi bare fjerne na i stedet, hvis vi ikke vil have de ekstra nodes, jeg foreslår :D
+    #add shot as a pass recipient as well
+    match_subset.loc[match_subset['type'] =='Shot', 'pass_recipient_position'] = match_subset.apply(lambda x: np.where(pd.isna(x['pass_recipient_position']), x['shot_outcome'], x['pass_recipient_position']), axis=1)
+
+    #if a does not have a pass_recipient_position yet, we drop it
     match_subset.dropna(subset=['pass_recipient_position'], inplace=True)
     match_subset['match_sequence'] = match_counter  
     # Process each half separately
+    half_sequence = 0  # Initialize sequence counter for halves
     for period in [1, 2]:  # Assuming '1' is the first half and '2' is the second half
         half_data = match_subset[match_subset['period'] == period].copy()
         if half_data.empty:
@@ -67,8 +89,8 @@ for match_id in events['match_id'].unique():
 
         # Append the processed half to the result list
         df_lst.append(half_data)
+    df_dict[id] = match_subset  
 
-# Initialize a dictionary to store graphs for each match half
 match_graph_dict = {}
 
 # Iterate through the DataFrames in df_lst, which represent each half of each match
