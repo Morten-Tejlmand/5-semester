@@ -15,6 +15,11 @@ match_ids = barca_home_matches['match_id'].values.tolist()
 
 
 #All events sorted for barca home games and possession 
+#find ids for barca home matches - only home games because then locations can be compared between different games
+matches = sb.matches(competition_id=11, season_id=90)
+barca_home_matches = matches[matches["home_team"]=="Barcelona"]
+match_ids = barca_home_matches['match_id'].values.tolist()
+#All events sorted for barca home games and possession 
 events = sb.competition_events(
     country="Spain",
     division= "La Liga",
@@ -24,36 +29,34 @@ events = sb.competition_events(
 events = events[events['match_id'].isin(match_ids)]
 df = events[events["team"]=="Barcelona"]
 df = df[df["possession_team"]=="Barcelona"]
-
+#filter threshold for Xg:
 df_xg = df[~df['shot_statsbomb_xg'].between(0, 0.05)]
+#Events sorted in a specific order so each passing sequence is correctly sorted
 sequences_sorted = df_xg.sort_values(['match_id', 'period','timestamp'], ascending=[True, True, True])
-
+#make new ids because right now there is ids from 1 to x for each match but it repeats from 1 and up in every match so each possession id points to different matches 
+# - i just put the possession id after match_id in the newly created id
 sequences_sorted['possession_id'] = sequences_sorted['match_id'].astype(str) + sequences_sorted['possession'].astype(str)
 sequences_sorted['possession_id'] = sequences_sorted['possession_id'].astype(int)
-
+#get the ids of sequences which contain a shot (contain an xg value)
 shot_sequences = sequences_sorted[sequences_sorted["shot_statsbomb_xg"].notna()]
 shot_sequences_ids = shot_sequences["possession_id"].unique()
-
+#filter for possession sequences which end with a shot
 sequences_filtered = sequences_sorted[sequences_sorted['possession_id'].isin(shot_sequences_ids)]
-
+#fill all rows with an xg for the corresponding sequence - right now there are many missing values in "shot_statsbomb_xg"
 sequences_filtered['xg'] = sequences_filtered.groupby('possession_id')['shot_statsbomb_xg'].transform(lambda group: group.fillna(method='ffill').fillna(method='bfill'))
-
-goal_posession_index = sequences_filtered.loc[sequences_filtered["shot_outcome"]=="Goal", "possession_id"]
-
+#now we dont need the shot event rows any more so remove them
 sequences_filtered = sequences_filtered[sequences_filtered["type"]!="Shot"]
-
-
-player_final_sequences =  sequences_filtered[sequences_filtered["pass_recipient"].notna()][["player_id", "pass_recipient_id", "possession_id", "xg"]]
+#filter the df to only include row with an id the of a pass recipient and we subset the columns
+player_final_sequences =  sequences_filtered[sequences_filtered["pass_recipient"].notna()][["player_id", "pass_recipient_id", "possession_id", "xg","timestamp"]]
+player_final_sequences
+player_final_sequences = player_final_sequences.sort_values(['possession_id', 'timestamp'], ascending=[True, True])
+player_final_sequences = player_final_sequences[player_final_sequences['player_id'] != player_final_sequences['pass_recipient_id']]
 player_final_sequences['sequence'] = player_final_sequences.groupby('possession_id').cumcount(ascending=False) + 1
-
-
-
+player_final_sequences
+#remove sequences with few passes if wanted
 index_counts = player_final_sequences['possession_id'].value_counts()
 player_final_sequences = player_final_sequences[player_final_sequences['possession_id'].isin(index_counts[index_counts > 5].index)]
-
 possession_index = player_final_sequences["possession_id"].unique()
-player_final_sequences
-
 
 
 #iterate over possession ids and each row and append edges to a list for each graph and append that graph to a graphs dictionary (directed graph created with "nx.DiGraph(edges)")
