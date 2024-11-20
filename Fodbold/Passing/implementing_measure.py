@@ -7,7 +7,7 @@ import networkx as nx
 
 
 
-df = pd.read_csv('/Users/morten/Desktop/p5 kode/5-semester/Fodbold/match_graph_data.csv')
+df = pd.read_csv('/Users/MathildeStouby/Desktop/P5 GitHub/5-semester/Fodbold/match_graph_data.csv')
 
 to_drop = df.loc[df['end_position'].isin(['Off T', 'Saved', 'Blocked', 'Goal', 'Wayward','Post', 'Saved to Post', 'Saved Off Target'])].index
 
@@ -65,7 +65,7 @@ plt.savefig('boxplot.pdf', bbox_inches='tight')
 
 df_closeness = pd.DataFrame(columns=position)
 for key, value in match_dict.items():
-    closeness = nx.closeness_centrality(value, distance='weight')
+    closeness = nx.closeness_centrality(value)
     df_closeness = pd.concat([df_closeness, pd.DataFrame(closeness, index=[key])], ignore_index=True)
 
 na_count = df_closeness.isna().sum().sort_values(ascending=True)[:11]
@@ -86,13 +86,13 @@ plt.savefig('boxplot.pdf', bbox_inches='tight')
 
 df_betweness = pd.DataFrame(columns=position)
 for key, value in match_dict.items():
-    closeness = nx.betweenness_centrality(value, weight='weight')
+    closeness = nx.betweenness_centrality(value)
     df_betweness = pd.concat([df_betweness, pd.DataFrame(closeness, index=[key])], ignore_index=True)
 
 na_count = df_betweness.isna().sum().sort_values(ascending=True)[:11]
 df_close_sub  = df_betweness[na_count.index]
 
-position = ['Goalkeeper', 'Center Forward', 'Left Defensive Midfield'] 
+position = ['Right Center Back', 'Left Defensive Midfield', 'Goalkeeper'] 
 default_color = "lightgrey"
 highlight_color = "cornflowerblue"
 custom_palette = {column: (highlight_color if column in position else default_color) for column in df_subset.columns}
@@ -104,3 +104,4 @@ sns.stripplot(data=df_close_sub, alpha=0.7, color='black', orient='h', size=4, o
 plt.savefig('boxplot.pdf', bbox_inches='tight')
 
 
+mathc
