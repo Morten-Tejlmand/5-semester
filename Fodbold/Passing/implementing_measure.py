@@ -104,4 +104,54 @@ sns.stripplot(data=df_close_sub, alpha=0.7, color='black', orient='h', size=4, o
 plt.savefig('boxplot.pdf', bbox_inches='tight')
 
 
-mathc
+
+# Create a simple graph to display differences in centrality measures
+G = nx.Graph()
+edges = [
+    (1, 2), (1, 3), (2, 4), (3, 4), (4, 5), 
+    (5, 6), (5, 7), (6, 7), (7, 8), (8, 9), 
+    (7, 9), (9, 10)
+]
+G.add_edges_from(edges)
+
+# Calculate centralities
+closeness = nx.closeness_centrality(G)
+betweenness = nx.betweenness_centrality(G)
+pagerank = nx.pagerank(G)
+
+# Normalize centralities for uniform visualization
+norm_closeness = np.array(list(closeness.values()))
+norm_closeness = (norm_closeness - norm_closeness.min()) / (norm_closeness.max() - norm_closeness.min())
+
+norm_betweenness = np.array(list(betweenness.values()))
+norm_betweenness = (norm_betweenness - norm_betweenness.min()) / (norm_betweenness.max() - norm_betweenness.min())
+
+norm_pagerank = np.array(list(pagerank.values()))
+norm_pagerank = (norm_pagerank - norm_pagerank.min()) / (norm_pagerank.max() - norm_pagerank.min())
+
+# Draw the graph with nodes sized by centrality
+fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+layouts = nx.spring_layout(G, seed=42)
+
+# Closeness centrality
+nx.draw(
+    G, pos=layouts, ax=axs[0], with_labels=True, 
+    node_size=norm_closeness * 2000 + 300, node_color='skyblue'
+)
+axs[0].set_title("Closeness Centrality")
+
+# Betweenness centrality
+nx.draw(
+    G, pos=layouts, ax=axs[1], with_labels=True, 
+    node_size=norm_betweenness * 2000 + 300, node_color='lightgreen'
+)
+axs[1].set_title("Betweenness Centrality")
+
+# PageRank centrality
+nx.draw(
+    G, pos=layouts, ax=axs[2], with_labels=True, 
+    node_size=norm_pagerank * 2000 + 300, node_color='salmon'
+)
+axs[2].set_title("PageRank Centrality")
+
+plt.savefig('centrality_differences.pdf', bbox_inches='tight')
