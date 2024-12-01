@@ -170,11 +170,16 @@ def generate_candidates(F, k):
 
 def count_support(C, graph_db):
     F_count = {}
+    
+    def edge_match(attr1, attr2):
+        return attr1.get('sequence') == attr2.get('sequence')
+    
     for graph in graph_db:
         for candidate in C:
-            GM = DiGraphMatcher(graph, candidate)
+            GM = DiGraphMatcher(graph, candidate, edge_match=edge_match)
             if GM.subgraph_is_isomorphic():  
                 F_count[candidate] = F_count.get(candidate, 0) + 1
+                
     return F_count
 
 # Filter frequent candidates based on minimum support (in percentage)
@@ -231,5 +236,7 @@ graph_list = [value["graph"] for value in graphs_dict.values()]
 
 edge_matrix = [list(graph.edges(data=True)) for graph in graph_list]
 GRAPH_DB = graph_list  
+graph_db = GRAPH_DB
+min_sup = 5
 frequent_subgraphs, patterns_df = apriori_graph_mining(5, edge_matrix, GRAPH_DB, 7)
 
