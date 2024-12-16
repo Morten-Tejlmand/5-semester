@@ -7,7 +7,7 @@ import networkx as nx
 
 
 
-df = pd.read_csv('/Users/morten/Desktop/p5 kode/5-semester/Fodbold/match_graph_data.csv')
+df = pd.read_csv('/Users/MathildeStouby/Desktop/P5 GitHub/5-semester/Fodbold/match_graph_data.csv')
 
 to_drop = df.loc[df['end_position'].isin(['Off T', 'Saved', 'Blocked', 'Goal', 'Wayward','Post', 'Saved to Post', 'Saved Off Target'])].index
 
@@ -15,22 +15,12 @@ df.drop(to_drop, inplace=True)
 df.drop(columns=['half_sequence'], inplace=True)
 df = df.groupby(['start_position', 'end_position', 'match_id'])['pass_frequency'].sum().reset_index()
 
-
-df_thres = df[df['pass_frequency']>3]
-
-match_dict = {}
-for match_id, group in df_thres.groupby('match_id'):
-    G = nx.DiGraph()
-    # Add edges with weights
-    for _, row in group.iterrows():
-        G.add_edge(row['start_position'], row['end_position'], weight=row['pass_frequency'])
-    
-    # Store the graph in the dictionary with match_id as the key
-    match_dict[match_id] = G
     
 match_dict_limit3 = {}
+match_dict = {}
 for match_id, group in df.groupby('match_id'):
     G3 = nx.DiGraph()
+    G = nx.DiGraph()
     # Add edges with weights
     for _, row in group.iterrows():
         G.add_edge(row['start_position'], row['end_position'], weight=row['pass_frequency'])
@@ -38,6 +28,8 @@ for match_id, group in df.groupby('match_id'):
             G3.add_edge(row['start_position'], row['end_position'], weight=row['pass_frequency'])
     # Store the graph in the dictionary with match_id as the key
     match_dict_limit3[match_id] = G3
+    match_dict[match_id] = G
+
 
 # pagerank
 position = ['Center Forward',
@@ -55,8 +47,6 @@ oder = ['Goalkeeper', 'Center Back', 'Right Center Back', 'Left Center Back', 'R
 
 
 df_pagerank = pd.DataFrame(columns=position)
-
-
 for key, value in match_dict.items():
     pagerank = nx.pagerank(value, weight='weight')
     df_pagerank = pd.concat([df_pagerank, pd.DataFrame(pagerank, index=[key])], ignore_index=True)
@@ -71,47 +61,25 @@ default_color = "lightgrey"
 highlight_color = "cornflowerblue"
 custom_palette = {column: (highlight_color if column in position else default_color) for column in df_subset.columns}
 
-
 plt.figure(figsize=(10, 6))
 sns.boxplot(data=df_subset, orient='h', palette=custom_palette, showfliers=False, order=oder)
 sns.stripplot(data=df_subset, alpha=0.7, color='black', orient='h', size=4, order=oder)
-plt.show()
+plt.savefig('boxplot_pagerank.pdf', bbox_inches='tight')
 
-for key, value in match_dict_limit3.items():
-    pagerank = nx.pagerank(value, weight='weight')
-    df_pagerank = pd.concat([df_pagerank, pd.DataFrame(pagerank, index=[key])], ignore_index=True)
-
-na_count = df_pagerank.isna().sum()[:11]
-df_subset = df_pagerank[na_count.index]
-
-# make a box plot for each column
-
-position = ['Goalkeeper', 'Left Attacking Midfield', 'Left Defensive Midfield'] 
-default_color = "lightgrey"
-highlight_color = "cornflowerblue"
-custom_palette = {column: (highlight_color if column in position else default_color) for column in df_subset.columns}
-
-
-plt.figure(figsize=(10, 6))
-sns.boxplot(data=df_subset, orient='h', palette=custom_palette, showfliers=False, order=oder)
-sns.stripplot(data=df_subset, alpha=0.7, color='black', orient='h', size=4, order=oder)
-plt.show()
 
 
 df_closeness = pd.DataFrame(columns=position)
-for key, value in match_dict.items():
+for key, value in match_dict_limit3.items():
     closeness = nx.closeness_centrality(value)
     df_closeness = pd.concat([df_closeness, pd.DataFrame(closeness, index=[key])], ignore_index=True)
 
 na_count = df_closeness.isna().sum().sort_values(ascending=True)[:11]
 df_close_sub  = df_closeness[na_count.index]
 
-
 position = ['Left Defensive Midfield', 'Center Forward', 'Goalkeeper'] 
 default_color = "lightgrey"
 highlight_color = "cornflowerblue"
 custom_palette = {column: (highlight_color if column in position else default_color) for column in df_close_sub.columns}
-
 
 plt.figure(figsize=(10, 6))
 sns.boxplot(data=df_close_sub, orient='h', showfliers=False, palette=custom_palette, order=oder)
@@ -119,8 +87,9 @@ sns.stripplot(data=df_close_sub, alpha=0.7, color='black', orient='h', size=4, o
 plt.savefig('boxplot_closness.pdf', bbox_inches='tight')
 
 
+
 df_betweness = pd.DataFrame(columns=position)
-for key, value in match_dict.items():
+for key, value in match_dict_limit3.items():
     closeness = nx.betweenness_centrality(value)
     df_betweness = pd.concat([df_betweness, pd.DataFrame(closeness, index=[key])], ignore_index=True)
 
@@ -132,45 +101,11 @@ default_color = "lightgrey"
 highlight_color = "cornflowerblue"
 custom_palette = {column: (highlight_color if column in position else default_color) for column in df_between_sub.columns}
 
-
-boxplot_stats = pd.DataFrame(columns=["Position", "Min", "Q1", "Median", "Q3", "Max"])
-
-for column in df_between_sub.columns:
-    data = df_between_sub[column] 
-    stats = {
-        "Position": column, 
-        "Min": data.min(),
-        "Q1": data.quantile(0.25),
-        "Median": data.median(),
-        "Q3": data.quantile(0.75),
-        "Max": data.max(),
-    }
-    boxplot_stats.loc[column] = stats
-
-# Manually order the positions
-boxplot_stats = boxplot_stats.set_index('Position').loc[oder].reset_index()
-
-boxplot_stats.reset_index(drop=True, inplace=True)
-
-latex_table = boxplot_stats.to_latex(
-    index=False,  # Exclude the index column
-    caption="Boxplot Statistics for Player Positions",  # Add a caption
-    label="tab:boxplot_stats",  # Add a label for referencing in LaTeX
-    column_format="|l|r|r|r|r|r|",  # Format columns with vertical lines
-    escape=False  # Allow special characters like \ in captions/labels
-)
-
-print(latex_table)
-# Display the box
-
 plt.figure(figsize=(10, 6))
 sns.boxplot(data=df_between_sub, orient='h', showfliers=False, palette=custom_palette, order=oder)
 sns.stripplot(data=df_between_sub, alpha=0.7, color='black', orient='h', size=4, order=oder)
-
-# Display the boxplot statistics
-print(boxplot_stats)
 plt.savefig('boxplot_between.pdf', bbox_inches='tight')
-entropy_list = []
+
 
 
 # Create a simple graph to display differences in centrality measures
@@ -224,6 +159,8 @@ axs[2].set_title("PageRank Centrality")
 
 plt.savefig('centrality_differences.pdf', bbox_inches='tight')
 # Calculate Shannon entropy for each graph and normalize it
+
+entropy_list = []
 for key, graph in match_dict.items():
     # Total weight of all edges
     total_weight = sum(weight for _, _, weight in graph.edges(data='weight', default=0))
@@ -249,7 +186,7 @@ df_entropy = pd.DataFrame(entropy_list)
 
 # Plot the normalized entropy values as a boxplot
 plt.figure(figsize=(6, 4))
-sns.boxplot(data=df_entropy, x='Entropy', color='cornflowerblue')
+sns.boxplot(data=df_entropy, x='Entropy', color='cornflowerblue', showfliers=False)
 sns.stripplot(data=df_entropy, x='Entropy', color='black', size=6, jitter=True, alpha=0.7)
 plt.xlabel('Entropy (0-1)')
-plt.show()
+plt.savefig('entropy boxplot.pdf', bbox_inches='tight')
