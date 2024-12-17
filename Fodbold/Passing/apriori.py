@@ -5,7 +5,7 @@ import networkx as nx
 from itertools import combinations
 import multiprocessing
 import numpy as np
-
+from helper_functions import create_graphs, create_graphs_dict
 multiprocessing.set_start_method('fork', force=True)
 
 from itertools import combinations
@@ -141,6 +141,7 @@ for j in possession_index:
     graphs_dict[j]["graph"] = graph
 
 
+
 def frequent_singletons(min_sup, edge_matrix, total_graphs):
     items_counted = {}
     edge_attributes = {}
@@ -215,6 +216,7 @@ def filter_frequent(F_count, min_sup, total_graphs):
         key for key, value in F_count.items()
         if (value / total_graphs) * 100 >= min_sup
     ]
+    
 # main function
 def apriori_graph_mining(min_sup, edge_matrix, graph_db, max_k):
     frequent_total = []
@@ -240,8 +242,25 @@ def apriori_graph_mining(min_sup, edge_matrix, graph_db, max_k):
         frequent_total.extend(F)
 
         for subgraph in F:
-            support_count = F_count[subgraph]
+            subgraph_edges = list(subgraph.edges(data=True))
+            subgraph_sequence = sorted((edge[2]['sequence'] for edge in subgraph_edges))
+            subgraph_sequence.sort()
+            subgraph_nodes = sorted((node, tuple(attributes.items())) for node, attributes in subgraph.nodes(data=True))  # Include node attributes
+            subgraph_nodes.sort()
+            support_count = 0
+
+            for reference_subgraph in F:
+                reference_subgraph_edges = list(reference_subgraph.edges(data=True))
+                reference_sequence = sorted((edge[2]['sequence'] for edge in reference_subgraph_edges))
+                reference_sequence.sort()
+                reference_nodes = sorted((node, tuple(attributes.items())) for node, attributes in reference_subgraph.nodes(data=True))
+                reference_nodes.sort()
+                
+                if subgraph_sequence == reference_sequence and subgraph_nodes == reference_nodes:
+                    support_count += 1 
+
             support_percentage = (support_count / total_graphs) * 100
+
 
             edges_with_attrs = [
                 (u, v, attr) for u, v, attr in subgraph.edges(data=True)
@@ -259,11 +278,16 @@ def apriori_graph_mining(min_sup, edge_matrix, graph_db, max_k):
     results_df = pd.DataFrame(results)
     return frequent_total, results_df
 
+possession_index, final_sequences = create_graphs(df)
+graph_list, graphs_dict = create_graphs_dict(possession_index, final_sequences)
+
 
 graph_list = [value["graph"] for value in graphs_dict.values()]
 
 edge_matrix = [list(graph.edges(data=True)) for graph in graph_list]
 GRAPH_DB = graph_list  
-frequent_subgraphs, patterns_df = apriori_graph_mining(20, edge_matrix, GRAPH_DB, 7)
+min_sup = 5
+max_k = 7
+frequent_subgraphs, patterns_df = apriori_graph_mining(5, edge_matrix, GRAPH_DB, 7)
 
 graph_db = GRAPH_DB
